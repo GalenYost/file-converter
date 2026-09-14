@@ -1,0 +1,12 @@
+[package]
+name = "converter-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+converter-core = { version = "0.1.0", path = "../converter-core" }
+directories = "6.0.0"
+iced = { version = "0.14.0", features = ["wgpu", "tokio"] }
+rfd = "0.17.2"
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros"] }
+tracing-subscriber = "0.3.23"
