@@ -2,6 +2,7 @@
 
 mod config;
 mod i18n;
+mod updates;
 
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
@@ -9,8 +10,8 @@ use std::sync::Arc;
 
 use directories::UserDirs;
 use iced::widget::{
-    button, column, container, pick_list, progress_bar, row, rule, scrollable, slider, text,
-    text_input, Space,
+    button, column, container, pick_list, progress_bar, radio, row, rule, scrollable, slider,
+    text, text_input, Space,
 };
 use iced::{
     Alignment, Color, Element, Length, Subscription, Task, Theme,
@@ -28,18 +29,28 @@ use converter_core::format::MediaFormat;
 use converter_core::job::{ConversionJob, JobEvent, JobId, JobStatus};
 use converter_core::progress::ConversionProgress;
 
-use config::{get_config_dir, load_config, save_config, AppConfig};
+use config::{get_config_dir, load_config, save_config, AppConfig, StartupWindowMode};
 use i18n::Language;
 
 fn main() -> iced::Result {
     let _log_guard = init_logging();
-    tracing::info!("Starting File converter");
+    tracing::info!("Starting File converter v{}", updates::CURRENT_VERSION);
 
-    iced::application(App::new, App::update, App::view)
+    updates::cleanup_stale_update_files();
+
+    let app_config = load_config();
+
+    let window_settings = iced::window::Settings {
+        maximized: app_config.window_mode == StartupWindowMode::Maximized,
+        ..Default::default()
+    };
+
+    iced::application(move || App::new(app_config.clone()), App::update, App::view)
         .title("File converter")
         .subscription(App::subscription)
         .theme(App::theme)
         .scale_factor(|state: &App| state.ui_scale as f32)
+        .window(window_settings)
         .run()
 }
 
@@ -143,6 +154,38 @@ pub struct App {
     download_items: Vec<DownloadCardItem>,
     download_url: String,
     download_format: DownloadFormat,
+    /// The id of the main window, captured on the first window event so we can
+    /// apply maximize/minimize actions to it later.
+    window_id: Option<iced::window::Id>,
+    /// True when the configured startup mode is Minimized; applies the
+    /// minimize action as soon as the window id becomes available.
+    startup_minimize_pending: bool,
+    /// Pending (not yet saved) copies of the settings. The settings screen
+    /// edits these and only applies them when "Save" is pressed.
+    draft_language: Language,
+    draft_max_concurrent_jobs: usize,
+    draft_default_target_format: MediaFormat,
+    draft_ui_scale: Option<f64>,
+    draft_window_mode: StartupWindowMode,
+    /// State of the automatic updater, driven from the settings screen.
+    update_state: UpdateState,
+}
+
+/// The current state of the built-in updater.
+#[derive(Debug, Clone)]
+pub enum UpdateState {
+    /// No check was run yet in this session.
+    Idle,
+    /// A "check for updates" request is in flight.
+    Checking,
+    /// A newer release is available and can be installed.
+    Available(updates::UpdateInfo),
+    /// The latest release matches the running version.
+    UpToDate,
+    /// The new release is being downloaded and installed.
+    Downloading,
+    /// The last check or update attempt failed.
+    Failed(String),
 }
 
 #[derive(Debug, Clone)]
@@ -160,11 +203,18 @@ pub enum Message {
     EngineEvent(JobEvent),
     ToggleSettings,
     TabSelected(MainTab),
-    LanguageSelected(Language),
-    ConcurrencyChanged(usize),
-    UiScaleChanged(f64),
-    UiScaleReset,
-    WindowEvent(iced::window::Event),
+    SettingsLanguageChanged(Language),
+    SettingsConcurrencyChanged(usize),
+    SettingsTargetFormatChanged(MediaFormat),
+    SettingsUiScaleChanged(f64),
+    SettingsUiScaleReset,
+    SettingsWindowModeChanged(StartupWindowMode),
+    SaveSettings,
+    CheckForUpdates,
+    UpdateCheckResult(Result<Option<updates::UpdateInfo>, String>),
+    PerformUpdate,
+    UpdateResult(Result<(), String>),
+    WindowEvent(iced::window::Id, iced::window::Event),
     DownloadUrlChanged(String),
     DownloadFormatChanged(DownloadFormat),
     StartDownload,
@@ -197,9 +247,7 @@ fn compute_ui_scale(monitor_scale: Option<f64>) -> f64 {
 }
 
 impl App {
-    pub fn new() -> (Self, Task<Message>) {
-        let loaded_config = load_config();
-
+    pub fn new(loaded_config: AppConfig) -> (Self, Task<Message>) {
         let ui_scale = loaded_config
             .ui_scale
             .unwrap_or_else(|| compute_ui_scale(None));
@@ -224,6 +272,9 @@ impl App {
             max_concurrent_jobs: loaded_config.max_concurrent_jobs.max(1),
         }));
 
+        let startup_minimize_pending =
+            loaded_config.window_mode == StartupWindowMode::Minimized;
+
         (
             Self {
                 engine,
@@ -232,13 +283,21 @@ impl App {
                 output_directory: default_dir,
                 tab: MainTab::Converter,
                 settings_open: false,
-                config: loaded_config,
+                config: loaded_config.clone(),
                 ui_scale,
                 monitor_scale: None,
                 download_engine,
                 download_items: Vec::new(),
                 download_url: String::new(),
                 download_format: DownloadFormat::Mp4,
+                window_id: None,
+                startup_minimize_pending,
+                draft_language: loaded_config.language,
+                draft_max_concurrent_jobs: loaded_config.max_concurrent_jobs,
+                draft_default_target_format: loaded_config.default_target_format,
+                draft_ui_scale: loaded_config.ui_scale,
+                draft_window_mode: loaded_config.window_mode,
+                update_state: UpdateState::Idle,
             },
             Task::none(),
         )
@@ -263,7 +322,8 @@ impl App {
             },
         );
 
-        let window_sub = iced::window::events().map(|(_id, event)| Message::WindowEvent(event));
+        let window_sub = iced::window::events()
+            .map(|(id, event)| Message::WindowEvent(id, event));
 
         let download_sub = Subscription::run_with(
             DownloadEngineHandle(Arc::clone(&self.download_engine)),
@@ -286,6 +346,14 @@ impl App {
         match message {
             Message::ToggleSettings => {
                 self.settings_open = !self.settings_open;
+                if self.settings_open {
+                    // Load current values into the pending drafts
+                    self.draft_language = self.config.language;
+                    self.draft_max_concurrent_jobs = self.config.max_concurrent_jobs;
+                    self.draft_default_target_format = self.config.default_target_format;
+                    self.draft_ui_scale = self.config.ui_scale;
+                    self.draft_window_mode = self.config.window_mode;
+                }
                 Task::none()
             }
             Message::TabSelected(tab) => {
@@ -293,38 +361,149 @@ impl App {
                 self.settings_open = false;
                 Task::none()
             }
-            Message::LanguageSelected(lang) => {
-                self.config.language = lang;
-                let _ = save_config(&self.config);
+            Message::SettingsLanguageChanged(lang) => {
+                self.draft_language = lang;
                 Task::none()
             }
-            Message::ConcurrencyChanged(conc) => {
-                self.config.max_concurrent_jobs = conc;
-                let _ = save_config(&self.config);
+            Message::SettingsConcurrencyChanged(conc) => {
+                self.draft_max_concurrent_jobs = conc;
                 Task::none()
             }
-            Message::UiScaleChanged(scale) => {
-                let scale = scale.clamp(UI_SCALE_MIN, UI_SCALE_MAX);
-                self.ui_scale = scale;
-                self.config.ui_scale = Some(scale);
-                let _ = save_config(&self.config);
+            Message::SettingsTargetFormatChanged(format) => {
+                self.draft_default_target_format = format;
                 Task::none()
             }
-            Message::UiScaleReset => {
-                self.config.ui_scale = None;
-                self.ui_scale = compute_ui_scale(self.monitor_scale);
-                let _ = save_config(&self.config);
+            Message::SettingsUiScaleChanged(scale) => {
+                self.draft_ui_scale = Some(scale.clamp(UI_SCALE_MIN, UI_SCALE_MAX));
                 Task::none()
             }
-            Message::WindowEvent(iced::window::Event::Rescaled(scale)) => {
-                let os_scale = scale as f64;
-                self.monitor_scale = Some(os_scale);
-                if self.config.ui_scale.is_none() {
-                    self.ui_scale = compute_ui_scale(Some(os_scale));
+            Message::SettingsUiScaleReset => {
+                self.draft_ui_scale = None;
+                Task::none()
+            }
+            Message::SettingsWindowModeChanged(mode) => {
+                self.draft_window_mode = mode;
+                Task::none()
+            }
+            Message::SaveSettings => {
+                self.config.language = self.draft_language;
+                self.config.max_concurrent_jobs = self.draft_max_concurrent_jobs;
+                self.selected_target_format = self.draft_default_target_format;
+                self.config.default_target_format = self.draft_default_target_format;
+                self.config.ui_scale = self.draft_ui_scale;
+                self.ui_scale = match self.draft_ui_scale {
+                    Some(scale) => scale.clamp(UI_SCALE_MIN, UI_SCALE_MAX),
+                    None => compute_ui_scale(self.monitor_scale),
+                };
+                self.config.window_mode = self.draft_window_mode;
+                let _ = save_config(&self.config);
+
+                for item in &mut self.items {
+                    if item.id.is_none() {
+                        item.target_format = self.config.default_target_format;
+                        let stem = item
+                            .input_path
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("converted");
+                        item.output_path = self
+                            .output_directory
+                            .join(format!("{}.{}", stem, self.config.default_target_format.extension()));
+                    }
+                }
+
+                self.settings_open = false;
+
+                match (self.config.window_mode, self.window_id) {
+                    (StartupWindowMode::Minimized, Some(id)) => {
+                        iced::window::minimize(id, true)
+                    }
+                    (StartupWindowMode::Maximized, Some(id)) => {
+                        iced::window::maximize(id, true)
+                    }
+                    (StartupWindowMode::Normal, Some(id)) => {
+                        iced::window::maximize(id, false)
+                    }
+                    _ => Task::none(),
+                }
+            }
+            Message::CheckForUpdates => {
+                self.update_state = UpdateState::Checking;
+                Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(updates::check_for_updates)
+                            .await
+                            .map_err(|e| e.to_string())?
+                    },
+                    Message::UpdateCheckResult,
+                )
+            }
+            Message::UpdateCheckResult(Ok(Some(info))) => {
+                if info.latest_version
+                    <= semver::Version::parse(updates::CURRENT_VERSION)
+                        .unwrap_or(semver::Version::new(0, 0, 0))
+                {
+                    self.update_state = UpdateState::UpToDate;
+                } else {
+                    self.update_state = UpdateState::Available(info);
                 }
                 Task::none()
             }
-            Message::WindowEvent(_) => Task::none(),
+            Message::UpdateCheckResult(Ok(None)) => {
+                self.update_state = UpdateState::UpToDate;
+                Task::none()
+            }
+            Message::UpdateCheckResult(Err(err)) => {
+                self.update_state = UpdateState::Failed(err);
+                Task::none()
+            }
+            Message::PerformUpdate => {
+                let info = match &self.update_state {
+                    UpdateState::Available(info) => info.clone(),
+                    _ => return Task::none(),
+                };
+                self.update_state = UpdateState::Downloading;
+                Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || updates::apply_update(&info))
+                            .await
+                            .map_err(|e| e.to_string())?
+                    },
+                    Message::UpdateResult,
+                )
+            }
+            Message::UpdateResult(Ok(())) => {
+                // The new version has been relaunched (or its start is queued).
+                self.update_state = UpdateState::Downloading;
+                std::process::exit(0);
+            }
+            Message::UpdateResult(Err(err)) => {
+                self.update_state = UpdateState::Failed(err);
+                Task::none()
+            }
+            Message::WindowEvent(id, event) => {
+                let mut task: Task<Message> = Task::none();
+
+                if self.window_id.is_none() {
+                    self.window_id = Some(id);
+                    if self.startup_minimize_pending {
+                        self.startup_minimize_pending = false;
+                        if self.config.window_mode == StartupWindowMode::Minimized {
+                            task = iced::window::minimize(id, true);
+                        }
+                    }
+                }
+
+                if let iced::window::Event::Rescaled(scale) = event {
+                    let os_scale = scale as f64;
+                    self.monitor_scale = Some(os_scale);
+                    if self.config.ui_scale.is_none() {
+                        self.ui_scale = compute_ui_scale(Some(os_scale));
+                    }
+                }
+
+                task
+            }
             Message::DownloadUrlChanged(url) => {
                 self.download_url = url;
                 Task::none()
@@ -1017,8 +1196,8 @@ impl App {
             text(lang.language_label()).size(13).width(Length::Fixed(180.0)),
             pick_list(
                 Language::ALL,
-                Some(self.config.language),
-                Message::LanguageSelected
+                Some(self.draft_language),
+                Message::SettingsLanguageChanged
             )
             .text_size(13)
             .padding([5, 10]),
@@ -1030,8 +1209,8 @@ impl App {
             text(lang.concurrency_label()).size(13).width(Length::Fixed(180.0)),
             pick_list(
                 &CONCURRENCY_OPTIONS[..],
-                Some(self.config.max_concurrent_jobs),
-                Message::ConcurrencyChanged
+                Some(self.draft_max_concurrent_jobs),
+                Message::SettingsConcurrencyChanged
             )
             .text_size(13)
             .padding([5, 10]),
@@ -1043,8 +1222,8 @@ impl App {
             text(lang.default_format_label()).size(13).width(Length::Fixed(180.0)),
             pick_list(
                 MediaFormat::all(),
-                Some(self.selected_target_format),
-                Message::GlobalTargetFormatChanged
+                Some(self.draft_default_target_format),
+                Message::SettingsTargetFormatChanged
             )
             .text_size(13)
             .padding([5, 10]),
@@ -1052,11 +1231,13 @@ impl App {
         .spacing(10)
         .align_y(Alignment::Center);
 
-        let is_manual_scale = self.config.ui_scale.is_some();
+        let is_manual_scale = self.draft_ui_scale.is_some();
+        let draft_scale =
+            self.draft_ui_scale.unwrap_or_else(|| compute_ui_scale(self.monitor_scale));
 
         let auto_scale_btn = if is_manual_scale {
             button(text(lang.ui_scale_auto_btn()).size(11))
-                .on_press(Message::UiScaleReset)
+                .on_press(Message::SettingsUiScaleReset)
                 .padding([3, 8])
         } else {
             button(
@@ -1069,10 +1250,14 @@ impl App {
 
         let scale_slider = row![
             text(lang.ui_scale_label()).size(13).width(Length::Fixed(180.0)),
-            slider(UI_SCALE_MIN..=UI_SCALE_MAX, self.ui_scale, Message::UiScaleChanged)
-                .step(UI_SCALE_STEP)
-                .width(Length::Fixed(220.0)),
-            text(format!("{:.0}%", self.ui_scale * 100.0))
+            slider(
+                UI_SCALE_MIN..=UI_SCALE_MAX,
+                draft_scale,
+                Message::SettingsUiScaleChanged
+            )
+            .step(UI_SCALE_STEP)
+            .width(Length::Fixed(220.0)),
+            text(format!("{:.0}%", draft_scale * 100.0))
                 .size(13)
                 .width(Length::Fixed(40.0)),
             auto_scale_btn,
@@ -1080,9 +1265,91 @@ impl App {
         .spacing(10)
         .align_y(Alignment::Center);
 
-        let back_btn = button(text(lang.close_btn()).size(13))
+        let window_mode_picker = row![
+            text(lang.window_state_label()).size(13).width(Length::Fixed(180.0)),
+            radio(
+                lang.window_mode_name(StartupWindowMode::Normal),
+                StartupWindowMode::Normal,
+                Some(self.draft_window_mode),
+                Message::SettingsWindowModeChanged
+            )
+            .text_size(13),
+            radio(
+                lang.window_mode_name(StartupWindowMode::Maximized),
+                StartupWindowMode::Maximized,
+                Some(self.draft_window_mode),
+                Message::SettingsWindowModeChanged
+            )
+            .text_size(13),
+            radio(
+                lang.window_mode_name(StartupWindowMode::Minimized),
+                StartupWindowMode::Minimized,
+                Some(self.draft_window_mode),
+                Message::SettingsWindowModeChanged
+            )
+            .text_size(13),
+        ]
+        .spacing(14)
+        .align_y(Alignment::Center);
+
+        let busy = matches!(
+            self.update_state,
+            UpdateState::Checking | UpdateState::Downloading
+        );
+
+        let version_row = row![
+            text(lang.version_label()).size(13).width(Length::Fixed(180.0)),
+            text(updates::CURRENT_VERSION).size(13),
+        ]
+        .spacing(10)
+        .align_y(Alignment::Center);
+
+        let check_btn = if busy {
+            button(text(lang.checking_updates()).size(13)).padding([6, 16])
+        } else {
+            button(text(lang.check_updates_btn()).size(13))
+                .on_press(Message::CheckForUpdates)
+                .padding([6, 16])
+        };
+
+        let updates_row = row![
+            text(lang.updates_label()).size(13).width(Length::Fixed(180.0)),
+            check_btn,
+        ]
+        .spacing(10)
+        .align_y(Alignment::Center);
+
+        let update_status_row: Element<'_, Message> = match &self.update_state {
+            UpdateState::Available(info) => row![
+                text(lang.update_available(info.latest_version.to_string()))
+                    .size(13),
+                button(text(lang.update_btn()).size(13))
+                    .on_press(Message::PerformUpdate)
+                    .padding([3, 10]),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center)
+            .into(),
+            UpdateState::Downloading => row![text(lang.updating()).size(13)].into(),
+            UpdateState::UpToDate => row![text(lang.up_to_date()).size(13)].into(),
+            UpdateState::Failed(err) => row![
+                text(err.as_str())
+                    .size(12)
+                    .color(Color::from_rgb(1.0, 0.45, 0.45)),
+            ]
+            .into(),
+            UpdateState::Idle | UpdateState::Checking => {
+                row![Space::new().height(Length::Fixed(0.0))].into()
+            }
+        };
+
+        let save_btn = button(text(lang.btn_save()).size(13))
+            .on_press(Message::SaveSettings)
+            .padding([6, 16]);
+        let cancel_btn = button(text(lang.btn_cancel()).size(13))
             .on_press(Message::ToggleSettings)
             .padding([6, 16]);
+        let settings_actions = row![save_btn, cancel_btn].spacing(10);
 
         let settings_card = column![
             text(lang.settings_title()).size(16),
@@ -1091,8 +1358,13 @@ impl App {
             concurrency_picker,
             format_picker,
             scale_slider,
+            window_mode_picker,
+            rule::horizontal(1),
+            version_row,
+            updates_row,
+            update_status_row,
             Space::new().height(Length::Fixed(12.0)),
-            back_btn,
+            settings_actions,
         ]
         .spacing(14);
 

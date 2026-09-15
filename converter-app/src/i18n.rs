@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::config::StartupWindowMode;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum Language {
     #[default]
@@ -257,6 +259,28 @@ impl Language {
         }
     }
 
+    pub fn window_state_label(&self) -> &'static str {
+        match self {
+            Language::English => "Startup window:",
+            Language::Ukrainian => "Вікно при запуску:",
+            Language::Russian => "Окно при запуске:",
+        }
+    }
+
+    pub fn window_mode_name(&self, mode: StartupWindowMode) -> &'static str {
+        match (self, mode) {
+            (Language::English, StartupWindowMode::Normal) => "Normal",
+            (Language::Ukrainian, StartupWindowMode::Normal) => "Звичайне",
+            (Language::Russian, StartupWindowMode::Normal) => "Обычное",
+            (Language::English, StartupWindowMode::Maximized) => "Maximized",
+            (Language::Ukrainian, StartupWindowMode::Maximized) => "Розгорнуте",
+            (Language::Russian, StartupWindowMode::Maximized) => "Развёрнутое",
+            (Language::English, StartupWindowMode::Minimized) => "Minimized",
+            (Language::Ukrainian, StartupWindowMode::Minimized) => "Згорнуте",
+            (Language::Russian, StartupWindowMode::Minimized) => "Свёрнутое",
+        }
+    }
+
     pub fn no_files_title(&self) -> &'static str {
         match self {
             Language::English => "No files in queue",
@@ -329,6 +353,78 @@ impl Language {
         }
     }
 
+    pub fn btn_save(&self) -> &'static str {
+        match self {
+            Language::English => "Save",
+            Language::Ukrainian => "Зберегти",
+            Language::Russian => "Сохранить",
+        }
+    }
+
+    pub fn version_label(&self) -> &'static str {
+        match self {
+            Language::English => "Version:",
+            Language::Ukrainian => "Версія:",
+            Language::Russian => "Версия:",
+        }
+    }
+
+    pub fn updates_label(&self) -> &'static str {
+        match self {
+            Language::English => "Updates:",
+            Language::Ukrainian => "Оновлення:",
+            Language::Russian => "Обновления:",
+        }
+    }
+
+    pub fn check_updates_btn(&self) -> &'static str {
+        match self {
+            Language::English => "Check for updates",
+            Language::Ukrainian => "Перевірити оновлення",
+            Language::Russian => "Проверить обновления",
+        }
+    }
+
+    pub fn checking_updates(&self) -> &'static str {
+        match self {
+            Language::English => "Checking...",
+            Language::Ukrainian => "Перевірка...",
+            Language::Russian => "Проверка...",
+        }
+    }
+
+    pub fn update_available(&self, version: String) -> String {
+        match self {
+            Language::English => format!("v{} is available", version),
+            Language::Ukrainian => format!("Доступна версія v{}", version),
+            Language::Russian => format!("Доступна версия v{}", version),
+        }
+    }
+
+    pub fn update_btn(&self) -> &'static str {
+        match self {
+            Language::English => "Update",
+            Language::Ukrainian => "Оновити",
+            Language::Russian => "Обновить",
+        }
+    }
+
+    pub fn updating(&self) -> &'static str {
+        match self {
+            Language::English => "Updating, the app will restart...",
+            Language::Ukrainian => "Оновлення, застосунок перезапуститься...",
+            Language::Russian => "Обновление, приложение перезапустится...",
+        }
+    }
+
+    pub fn up_to_date(&self) -> &'static str {
+        match self {
+            Language::English => "You are on the latest version",
+            Language::Ukrainian => "У вас найновіша версія",
+            Language::Russian => "У вас последняя версия",
+        }
+    }
+
     pub fn btn_remove(&self) -> &'static str {
         match self {
             Language::English => "Remove",
@@ -363,6 +459,20 @@ mod tests {
             assert!(!lang.convert_all().is_empty());
             assert!(!lang.settings_title().is_empty());
             assert!(!lang.files_in_queue(5).is_empty());
+            assert!(!lang.window_state_label().is_empty());
+            assert!(!lang.btn_save().is_empty());
+            assert!(!lang.btn_cancel().is_empty());
+            assert!(!lang.version_label().is_empty());
+            assert!(!lang.updates_label().is_empty());
+            assert!(!lang.check_updates_btn().is_empty());
+            assert!(!lang.checking_updates().is_empty());
+            assert!(!lang.update_available("1.0.0".to_string()).is_empty());
+            assert!(!lang.update_btn().is_empty());
+            assert!(!lang.updating().is_empty());
+            assert!(!lang.up_to_date().is_empty());
+            for mode in StartupWindowMode::ALL {
+                assert!(!lang.window_mode_name(*mode).is_empty());
+            }
         }
     }
 }

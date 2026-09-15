@@ -5,6 +5,23 @@ use serde::{Deserialize, Serialize};
 use converter_core::format::MediaFormat;
 use crate::i18n::Language;
 
+/// The window state the app should use when it starts up.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub enum StartupWindowMode {
+    /// Default windowed state.
+    #[default]
+    Normal,
+    /// Start maximized.
+    Maximized,
+    /// Start minimized.
+    Minimized,
+}
+
+impl StartupWindowMode {
+    pub const ALL: &'static [StartupWindowMode] =
+        &[StartupWindowMode::Normal, StartupWindowMode::Maximized, StartupWindowMode::Minimized];
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppConfig {
     pub language: Language,
@@ -13,6 +30,8 @@ pub struct AppConfig {
     pub default_target_format: MediaFormat,
     #[serde(default)]
     pub ui_scale: Option<f64>,
+    #[serde(default)]
+    pub window_mode: StartupWindowMode,
 }
 
 impl Default for AppConfig {
@@ -23,6 +42,7 @@ impl Default for AppConfig {
             max_concurrent_jobs: 2,
             default_target_format: MediaFormat::Mp4,
             ui_scale: None,
+            window_mode: StartupWindowMode::Normal,
         }
     }
 }
@@ -81,6 +101,7 @@ mod tests {
             max_concurrent_jobs: 4,
             default_target_format: MediaFormat::Flac,
             ui_scale: Some(1.25),
+            window_mode: StartupWindowMode::Maximized,
         };
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: AppConfig = serde_json::from_str(&json).unwrap();
@@ -92,5 +113,6 @@ mod tests {
         let json = r#"{"language":"English","output_directory":null,"max_concurrent_jobs":2,"default_target_format":"Mp4"}"#;
         let config: AppConfig = serde_json::from_str(json).unwrap();
         assert_eq!(config.ui_scale, None);
+        assert_eq!(config.window_mode, StartupWindowMode::Normal);
     }
 }
