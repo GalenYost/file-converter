@@ -147,10 +147,10 @@ jobs:
           cp $(which ffmpeg) target/${{ matrix.target }}/release/
           cp $(which ffprobe) target/${{ matrix.target }}/release/
           echo "Downloading yt-dlp for macOS..."
-          curl -fL --retry 5 --retry-delay 10 --retry-all-errors -o "target/${{ matrix.target }}/release/yt-dlp" "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos_arm64"
+          curl -fL --retry 5 --retry-delay 10 --retry-all-errors -o "target/${{ matrix.target }}/release/yt-dlp" "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"
           if [ ! -s "target/${{ matrix.target }}/release/yt-dlp" ] || [ "$(stat -c%s "target/${{ matrix.target }}/release/yt-dlp" 2>/dev/null || stat -f%z "target/${{ matrix.target }}/release/yt-dlp")" -lt 1000000 ]; then
             echo "yt-dlp binary is missing or suspiciously small, retrying download..." >&2
-            curl -fL --retry 5 --retry-delay 10 --retry-all-errors -o "target/${{ matrix.target }}/release/yt-dlp" "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos_arm64"
+            curl -fL --retry 5 --retry-delay 10 --retry-all-errors -o "target/${{ matrix.target }}/release/yt-dlp" "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"
           fi
           if [ ! -s "target/${{ matrix.target }}/release/yt-dlp" ] || [ "$(stat -c%s "target/${{ matrix.target }}/release/yt-dlp" 2>/dev/null || stat -f%z "target/${{ matrix.target }}/release/yt-dlp")" -lt 1000000 ]; then
             echo "yt-dlp binary is missing or suspiciously small after retry" >&2
