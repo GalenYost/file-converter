@@ -5,7 +5,7 @@ pub mod job;
 pub mod probe;
 pub mod progress;
 
-pub use binaries::{find_ffmpeg, find_ffprobe, verify_binary};
+pub use binaries::{create_quiet_cmd, find_ffmpeg, find_ffprobe, verify_binary};
 pub use engine::{ConversionEngine, EngineConfig};
 pub use format::{MediaCategory, MediaFormat};
 pub use job::{ConversionJob, JobEvent, JobId, JobOptions, JobStatus};

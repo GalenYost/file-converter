@@ -1,7 +1,7 @@
 use std::time::Duration;
-use tokio::process::Command;
 use tokio::time::sleep;
 
+use converter_core::binaries::create_quiet_cmd;
 use converter_core::engine::{ConversionEngine, EngineConfig};
 use converter_core::format::MediaFormat;
 use converter_core::job::{ConversionJob, JobStatus};
@@ -18,7 +18,7 @@ async fn test_real_audio_transcoding() {
     let _ = tokio::fs::remove_file(&output_mp3).await;
 
     // Generate a 1-second 440Hz test sine tone using ffmpeg
-    let gen_status = Command::new("ffmpeg")
+    let gen_status = create_quiet_cmd("ffmpeg")
         .args([
             "-y",
             "-f",

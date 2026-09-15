@@ -1,6 +1,5 @@
 use std::path::Path;
 use serde::{Deserialize, Serialize};
-use tokio::process::Command;
 
 /// Metadata probed from a media file.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -55,7 +54,7 @@ pub async fn probe_file(path: &Path) -> Result<MediaInfo, String> {
 
 async fn probe_with_ffprobe(path: &Path) -> Result<MediaInfo, String> {
     let bin = crate::binaries::find_ffprobe();
-    let output = Command::new(&bin)
+    let output = crate::binaries::create_quiet_cmd(&bin)
         .arg("-v")
         .arg("quiet")
         .arg("-print_format")
@@ -110,7 +109,7 @@ async fn probe_with_ffprobe(path: &Path) -> Result<MediaInfo, String> {
 
 async fn probe_with_ffmpeg(path: &Path) -> Result<MediaInfo, String> {
     let bin = crate::binaries::find_ffmpeg();
-    let output = Command::new(&bin)
+    let output = crate::binaries::create_quiet_cmd(&bin)
         .arg("-i")
         .arg(path)
         .output()

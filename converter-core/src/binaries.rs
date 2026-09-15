@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use directories::ProjectDirs;
 use tokio::process::Command;
 
@@ -60,9 +60,22 @@ fn find_executable(name: &str) -> PathBuf {
     PathBuf::from(name)
 }
 
+/// Create a `tokio::process::Command` that will not flash a terminal window
+/// on Windows. On non-Windows platforms this is identical to `Command::new`.
+pub fn create_quiet_cmd(path: impl AsRef<Path>) -> Command {
+    #[cfg_attr(not(windows), allow(unused_mut))]
+    let mut cmd = Command::new(path.as_ref());
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
 /// Test whether the specified binary is executable.
 pub async fn verify_binary(binary: &PathBuf) -> bool {
-    Command::new(binary)
+    create_quiet_cmd(binary)
         .arg("-version")
         .output()
         .await

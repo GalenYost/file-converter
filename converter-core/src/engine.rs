@@ -5,7 +5,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
 use tokio::sync::{broadcast, mpsc, Mutex, Semaphore};
 use tracing::{error, info, warn};
 
@@ -197,7 +196,7 @@ async fn run_job_lifecycle(
         id, job.input_path, job.output_path
     );
 
-    let mut cmd = Command::new(&ffmpeg_bin);
+    let mut cmd = crate::binaries::create_quiet_cmd(&ffmpeg_bin);
     cmd.args(&args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
