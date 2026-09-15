@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 mod config;
 mod i18n;
 
@@ -14,23 +16,50 @@ use iced::{
     Alignment, Color, Element, Length, Subscription, Task, Theme,
 };
 use rfd::AsyncFileDialog;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 use converter_core::engine::{ConversionEngine, EngineConfig};
 use converter_core::format::MediaFormat;
 use converter_core::job::{ConversionJob, JobEvent, JobId, JobStatus};
 use converter_core::progress::ConversionProgress;
 
-use config::{load_config, save_config, AppConfig};
+use config::{get_config_dir, load_config, save_config, AppConfig};
 use i18n::Language;
 
 fn main() -> iced::Result {
-    tracing_subscriber::fmt::init();
+    let _log_guard = init_logging();
+    tracing::info!("Starting File converter");
 
     iced::application(App::new, App::update, App::view)
         .title("File converter")
         .subscription(App::subscription)
         .theme(App::theme)
         .run()
+}
+
+fn init_logging() -> Option<tracing_appender::non_blocking::WorkerGuard> {
+    if let Some(config_dir) = get_config_dir() {
+        let _ = std::fs::create_dir_all(&config_dir);
+        let file_appender = tracing_appender::rolling::never(&config_dir, "file-converter.log");
+        let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+
+        let file_layer = tracing_subscriber::fmt::layer()
+            .with_writer(non_blocking)
+            .with_ansi(false);
+
+        let stdout_layer = tracing_subscriber::fmt::layer();
+
+        tracing_subscriber::registry()
+            .with(file_layer)
+            .with(stdout_layer)
+            .init();
+
+        Some(guard)
+    } else {
+        tracing_subscriber::fmt::init();
+        None
+    }
 }
 
 #[derive(Clone)]

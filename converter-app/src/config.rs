@@ -24,9 +24,18 @@ impl Default for AppConfig {
     }
 }
 
-pub fn get_config_path() -> Option<PathBuf> {
+pub fn get_config_dir() -> Option<PathBuf> {
     ProjectDirs::from("com", "GalenYost", "file-converter")
-        .map(|dirs| dirs.config_dir().join("config.json"))
+        .map(|dirs| dirs.config_dir().to_path_buf())
+}
+
+pub fn get_config_path() -> Option<PathBuf> {
+    get_config_dir().map(|dir| dir.join("config.json"))
+}
+
+#[allow(dead_code)]
+pub fn get_log_path() -> Option<PathBuf> {
+    get_config_dir().map(|dir| dir.join("file-converter.log"))
 }
 
 pub fn load_config() -> AppConfig {
