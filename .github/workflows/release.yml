@@ -96,7 +96,20 @@ jobs:
             }
           }
           if (-not (Test-Path "target/${{ matrix.target }}/release/yt-dlp.exe") -or (Get-Item "target/${{ matrix.target }}/release/yt-dlp.exe").Length -lt 1000000) {
-            throw "yt-dlp binary is missing or suspiciously small"
+            Write-Host "yt-dlp binary missing/small, retrying download..."
+            for ($ytdlpTry = 0; $ytdlpTry -lt $ytdlpAttempts; $ytdlpTry++) {
+              try {
+                Invoke-WebRequest -Uri $ytdlpUrl -OutFile "target/${{ matrix.target }}/release/yt-dlp.exe" -UseBasicParsing
+                break
+              } catch {
+                if ($ytdlpTry -eq ($ytdlpAttempts - 1)) { throw }
+                Write-Host "yt-dlp retry failed, retrying ($($ytdlpTry + 1)/$ytdlpAttempts)..."
+                Start-Sleep -Seconds 10
+              }
+            }
+          }
+          if (-not (Test-Path "target/${{ matrix.target }}/release/yt-dlp.exe") -or (Get-Item "target/${{ matrix.target }}/release/yt-dlp.exe").Length -lt 1000000) {
+            throw "yt-dlp binary is missing or suspiciously small after retry"
           }
           Compress-Archive -Path "target/${{ matrix.target }}/release/converter-app.exe", "target/${{ matrix.target }}/release/ffmpeg.exe", "target/${{ matrix.target }}/release/ffprobe.exe", "target/${{ matrix.target }}/release/yt-dlp.exe" -DestinationPath "${{ matrix.archive_name }}"
 
@@ -116,7 +129,11 @@ jobs:
           echo "Downloading yt-dlp for Linux..."
           curl -fL --retry 5 --retry-delay 10 --retry-all-errors -o "target/${{ matrix.target }}/release/yt-dlp" "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux"
           if [ ! -s "target/${{ matrix.target }}/release/yt-dlp" ] || [ "$(stat -c%s "target/${{ matrix.target }}/release/yt-dlp" 2>/dev/null || stat -f%z "target/${{ matrix.target }}/release/yt-dlp")" -lt 1000000 ]; then
-            echo "yt-dlp binary is missing or suspiciously small" >&2
+            echo "yt-dlp binary is missing or suspiciously small, retrying download..." >&2
+            curl -fL --retry 5 --retry-delay 10 --retry-all-errors -o "target/${{ matrix.target }}/release/yt-dlp" "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux"
+          fi
+          if [ ! -s "target/${{ matrix.target }}/release/yt-dlp" ] || [ "$(stat -c%s "target/${{ matrix.target }}/release/yt-dlp" 2>/dev/null || stat -f%z "target/${{ matrix.target }}/release/yt-dlp")" -lt 1000000 ]; then
+            echo "yt-dlp binary is missing or suspiciously small after retry" >&2
             exit 1
           fi
           chmod +x target/${{ matrix.target }}/release/ffmpeg target/${{ matrix.target }}/release/ffprobe target/${{ matrix.target }}/release/yt-dlp
@@ -132,7 +149,11 @@ jobs:
           echo "Downloading yt-dlp for macOS..."
           curl -fL --retry 5 --retry-delay 10 --retry-all-errors -o "target/${{ matrix.target }}/release/yt-dlp" "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos_arm64"
           if [ ! -s "target/${{ matrix.target }}/release/yt-dlp" ] || [ "$(stat -c%s "target/${{ matrix.target }}/release/yt-dlp" 2>/dev/null || stat -f%z "target/${{ matrix.target }}/release/yt-dlp")" -lt 1000000 ]; then
-            echo "yt-dlp binary is missing or suspiciously small" >&2
+            echo "yt-dlp binary is missing or suspiciously small, retrying download..." >&2
+            curl -fL --retry 5 --retry-delay 10 --retry-all-errors -o "target/${{ matrix.target }}/release/yt-dlp" "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos_arm64"
+          fi
+          if [ ! -s "target/${{ matrix.target }}/release/yt-dlp" ] || [ "$(stat -c%s "target/${{ matrix.target }}/release/yt-dlp" 2>/dev/null || stat -f%z "target/${{ matrix.target }}/release/yt-dlp")" -lt 1000000 ]; then
+            echo "yt-dlp binary is missing or suspiciously small after retry" >&2
             exit 1
           fi
           chmod +x target/${{ matrix.target }}/release/yt-dlp target/${{ matrix.target }}/release/ffmpeg target/${{ matrix.target }}/release/ffprobe
