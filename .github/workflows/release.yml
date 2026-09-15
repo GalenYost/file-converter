@@ -57,17 +57,40 @@ jobs:
       - name: Build Release Binary
         run: cargo build --release --bin converter-app --target ${{ matrix.target }}
 
-      - name: Package Artifact (Windows)
+      - name: Bundle FFmpeg (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $bin = "target/${{ matrix.target }}/release/${{ matrix.binary_name }}"
-          Compress-Archive -Path $bin -DestinationPath "${{ matrix.archive_name }}"
+          Write-Host "Downloading prebuilt static FFmpeg for Windows..."
+          Invoke-WebRequest -Uri "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" -OutFile "ffmpeg.zip"
+          Expand-Archive -Path "ffmpeg.zip" -DestinationPath "ffmpeg-extracted"
+          $ffmpegExe = Get-ChildItem -Path "ffmpeg-extracted" -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
+          $ffprobeExe = Get-ChildItem -Path "ffmpeg-extracted" -Recurse -Filter "ffprobe.exe" | Select-Object -First 1
+          Copy-Item $ffmpegExe.FullName -Destination "target/${{ matrix.target }}/release/ffmpeg.exe"
+          Copy-Item $ffprobeExe.FullName -Destination "target/${{ matrix.target }}/release/ffprobe.exe"
+          Compress-Archive -Path "target/${{ matrix.target }}/release/converter-app.exe", "target/${{ matrix.target }}/release/ffmpeg.exe", "target/${{ matrix.target }}/release/ffprobe.exe" -DestinationPath "${{ matrix.archive_name }}"
 
-      - name: Package Artifact (Unix)
-        if: runner.os != 'Windows'
+      - name: Bundle FFmpeg (Linux)
+        if: runner.os == 'Linux'
         run: |
-          tar -czvf "${{ matrix.archive_name }}" -C "target/${{ matrix.target }}/release" "${{ matrix.binary_name }}"
+          echo "Downloading prebuilt static FFmpeg for Linux..."
+          curl -L -o ffmpeg.tar.xz "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz"
+          mkdir -p ffmpeg-extracted
+          tar -xf ffmpeg.tar.xz -C ffmpeg-extracted --strip-components=1
+          cp ffmpeg-extracted/bin/ffmpeg target/${{ matrix.target }}/release/
+          cp ffmpeg-extracted/bin/ffprobe target/${{ matrix.target }}/release/
+          chmod +x target/${{ matrix.target }}/release/ffmpeg target/${{ matrix.target }}/release/ffprobe
+          tar -czvf "${{ matrix.archive_name }}" -C "target/${{ matrix.target }}/release" converter-app ffmpeg ffprobe
+
+      - name: Bundle FFmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          echo "Installing and bundling FFmpeg for macOS..."
+          brew install ffmpeg
+          cp $(which ffmpeg) target/${{ matrix.target }}/release/
+          cp $(which ffprobe) target/${{ matrix.target }}/release/
+          chmod +x target/${{ matrix.target }}/release/ffmpeg target/${{ matrix.target }}/release/ffprobe
+          tar -czvf "${{ matrix.archive_name }}" -C "target/${{ matrix.target }}/release" converter-app ffmpeg ffprobe
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4

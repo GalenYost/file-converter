@@ -27,7 +27,7 @@ impl Default for EngineConfig {
     fn default() -> Self {
         Self {
             max_concurrent_jobs: 2,
-            ffmpeg_path: PathBuf::from("ffmpeg"),
+            ffmpeg_path: crate::binaries::find_ffmpeg(),
         }
     }
 }

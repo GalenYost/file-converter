@@ -509,6 +509,7 @@ name = "converter-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "directories",
  "rayon",
  "serde",
  "serde_json",

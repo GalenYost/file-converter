@@ -54,7 +54,8 @@ pub async fn probe_file(path: &Path) -> Result<MediaInfo, String> {
 }
 
 async fn probe_with_ffprobe(path: &Path) -> Result<MediaInfo, String> {
-    let output = Command::new("ffprobe")
+    let bin = crate::binaries::find_ffprobe();
+    let output = Command::new(&bin)
         .arg("-v")
         .arg("quiet")
         .arg("-print_format")
@@ -108,7 +109,8 @@ async fn probe_with_ffprobe(path: &Path) -> Result<MediaInfo, String> {
 }
 
 async fn probe_with_ffmpeg(path: &Path) -> Result<MediaInfo, String> {
-    let output = Command::new("ffmpeg")
+    let bin = crate::binaries::find_ffmpeg();
+    let output = Command::new(&bin)
         .arg("-i")
         .arg(path)
         .output()

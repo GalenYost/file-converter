@@ -110,7 +110,7 @@ impl App {
 
         let engine = Arc::new(ConversionEngine::new(EngineConfig {
             max_concurrent_jobs: loaded_config.max_concurrent_jobs,
-            ffmpeg_path: PathBuf::from("ffmpeg"),
+            ffmpeg_path: converter_core::find_ffmpeg(),
         }));
 
         (
