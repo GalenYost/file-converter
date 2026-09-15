@@ -68,7 +68,9 @@ jobs:
           $ffprobeExe = Get-ChildItem -Path "ffmpeg-extracted" -Recurse -Filter "ffprobe.exe" | Select-Object -First 1
           Copy-Item $ffmpegExe.FullName -Destination "target/${{ matrix.target }}/release/ffmpeg.exe"
           Copy-Item $ffprobeExe.FullName -Destination "target/${{ matrix.target }}/release/ffprobe.exe"
-          Compress-Archive -Path "target/${{ matrix.target }}/release/converter-app.exe", "target/${{ matrix.target }}/release/ffmpeg.exe", "target/${{ matrix.target }}/release/ffprobe.exe" -DestinationPath "${{ matrix.archive_name }}"
+          Write-Host "Downloading yt-dlp for Windows..."
+          Invoke-WebRequest -Uri "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile "target/${{ matrix.target }}/release/yt-dlp.exe"
+          Compress-Archive -Path "target/${{ matrix.target }}/release/converter-app.exe", "target/${{ matrix.target }}/release/ffmpeg.exe", "target/${{ matrix.target }}/release/ffprobe.exe", "target/${{ matrix.target }}/release/yt-dlp.exe" -DestinationPath "${{ matrix.archive_name }}"
 
       - name: Bundle FFmpeg (Linux)
         if: runner.os == 'Linux'
@@ -79,8 +81,10 @@ jobs:
           tar -xf ffmpeg.tar.xz -C ffmpeg-extracted --strip-components=1
           cp ffmpeg-extracted/bin/ffmpeg target/${{ matrix.target }}/release/
           cp ffmpeg-extracted/bin/ffprobe target/${{ matrix.target }}/release/
-          chmod +x target/${{ matrix.target }}/release/ffmpeg target/${{ matrix.target }}/release/ffprobe
-          tar -czvf "${{ matrix.archive_name }}" -C "target/${{ matrix.target }}/release" converter-app ffmpeg ffprobe
+          echo "Downloading yt-dlp for Linux..."
+          curl -L -o "target/${{ matrix.target }}/release/yt-dlp" "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux"
+          chmod +x target/${{ matrix.target }}/release/ffmpeg target/${{ matrix.target }}/release/ffprobe target/${{ matrix.target }}/release/yt-dlp
+          tar -czvf "${{ matrix.archive_name }}" -C "target/${{ matrix.target }}/release" converter-app ffmpeg ffprobe yt-dlp
 
       - name: Bundle FFmpeg (macOS)
         if: runner.os == 'macOS'
@@ -89,8 +93,10 @@ jobs:
           brew install ffmpeg
           cp $(which ffmpeg) target/${{ matrix.target }}/release/
           cp $(which ffprobe) target/${{ matrix.target }}/release/
-          chmod +x target/${{ matrix.target }}/release/ffmpeg target/${{ matrix.target }}/release/ffprobe
-          tar -czvf "${{ matrix.archive_name }}" -C "target/${{ matrix.target }}/release" converter-app ffmpeg ffprobe
+          echo "Downloading yt-dlp for macOS..."
+          curl -L -o "target/${{ matrix.target }}/release/yt-dlp" "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos_arm64"
+          chmod +x target/${{ matrix.target }}/release/yt-dlp target/${{ matrix.target }}/release/ffmpeg target/${{ matrix.target }}/release/ffprobe
+          tar -czvf "${{ matrix.archive_name }}" -C "target/${{ matrix.target }}/release" converter-app ffmpeg ffprobe yt-dlp
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4

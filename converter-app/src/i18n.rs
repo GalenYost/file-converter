@@ -145,6 +145,110 @@ impl Language {
         }
     }
 
+    pub fn tab_converter(&self) -> &'static str {
+        match self {
+            Language::English => "Converter",
+            Language::Ukrainian => "Конвертер",
+            Language::Russian => "Конвертер",
+        }
+    }
+
+    pub fn tab_downloader(&self) -> &'static str {
+        match self {
+            Language::English => "Downloader",
+            Language::Ukrainian => "Завантажувач",
+            Language::Russian => "Загрузчик",
+        }
+    }
+
+    pub fn dl_title(&self) -> &'static str {
+        match self {
+            Language::English => "TikTok Downloader",
+            Language::Ukrainian => "Завантаження TikTok",
+            Language::Russian => "Скачивание TikTok",
+        }
+    }
+
+    pub fn dl_url_placeholder(&self) -> &'static str {
+        match self {
+            Language::English => "Paste a TikTok link (https://www.tiktok.com/...)",
+            Language::Ukrainian => "Вставте посилання TikTok (https://www.tiktok.com/...)",
+            Language::Russian => "Вставьте ссылку TikTok (https://www.tiktok.com/...)",
+        }
+    }
+
+    pub fn dl_format_label(&self) -> &'static str {
+        match self {
+            Language::English => "Format:",
+            Language::Ukrainian => "Формат:",
+            Language::Russian => "Формат:",
+        }
+    }
+
+    pub fn dl_download_btn(&self) -> &'static str {
+        match self {
+            Language::English => "Download",
+            Language::Ukrainian => "Завантажити",
+            Language::Russian => "Скачать",
+        }
+    }
+
+    pub fn dl_no_jobs_title(&self) -> &'static str {
+        match self {
+            Language::English => "No downloads yet",
+            Language::Ukrainian => "Завантажень ще немає",
+            Language::Russian => "Загрузок пока нет",
+        }
+    }
+
+    pub fn dl_no_jobs_subtitle(&self) -> &'static str {
+        match self {
+            Language::English => "Paste a link above and press \"Download\"",
+            Language::Ukrainian => "Вставте посилання вище та натисніть \"Завантажити\"",
+            Language::Russian => "Вставьте ссылку выше и нажмите \"Скачать\"",
+        }
+    }
+
+    pub fn dl_status_queued(&self) -> &'static str {
+        match self {
+            Language::English => "Queued",
+            Language::Ukrainian => "У черзі",
+            Language::Russian => "В очереди",
+        }
+    }
+
+    pub fn dl_status_downloading(&self) -> &'static str {
+        match self {
+            Language::English => "Downloading...",
+            Language::Ukrainian => "Завантаження...",
+            Language::Russian => "Скачивание...",
+        }
+    }
+
+    pub fn dl_status_completed(&self) -> &'static str {
+        match self {
+            Language::English => "Downloaded ✓",
+            Language::Ukrainian => "Завантажено ✓",
+            Language::Russian => "Скачано ✓",
+        }
+    }
+
+    pub fn dl_status_failed(&self, err: &str) -> String {
+        match self {
+            Language::English => format!("Failed: {}", err),
+            Language::Ukrainian => format!("Помилка: {}", err),
+            Language::Russian => format!("Ошибка: {}", err),
+        }
+    }
+
+    pub fn dl_status_cancelled(&self) -> &'static str {
+        match self {
+            Language::English => "Cancelled",
+            Language::Ukrainian => "Скасовано",
+            Language::Russian => "Отменено",
+        }
+    }
+
     pub fn close_btn(&self) -> &'static str {
         match self {
             Language::English => "Back to Queue",
