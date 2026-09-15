@@ -129,6 +129,22 @@ impl Language {
         }
     }
 
+    pub fn ui_scale_label(&self) -> &'static str {
+        match self {
+            Language::English => "UI Scale:",
+            Language::Ukrainian => "Масштаб інтерфейсу:",
+            Language::Russian => "Масштаб интерфейса:",
+        }
+    }
+
+    pub fn ui_scale_auto_btn(&self) -> &'static str {
+        match self {
+            Language::English => "Auto",
+            Language::Ukrainian => "Авто",
+            Language::Russian => "Авто",
+        }
+    }
+
     pub fn close_btn(&self) -> &'static str {
         match self {
             Language::English => "Back to Queue",

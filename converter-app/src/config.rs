@@ -11,6 +11,8 @@ pub struct AppConfig {
     pub output_directory: Option<PathBuf>,
     pub max_concurrent_jobs: usize,
     pub default_target_format: MediaFormat,
+    #[serde(default)]
+    pub ui_scale: Option<f64>,
 }
 
 impl Default for AppConfig {
@@ -20,6 +22,7 @@ impl Default for AppConfig {
             output_directory: None,
             max_concurrent_jobs: 2,
             default_target_format: MediaFormat::Mp4,
+            ui_scale: None,
         }
     }
 }
@@ -77,9 +80,17 @@ mod tests {
             output_directory: Some(PathBuf::from("/test/path")),
             max_concurrent_jobs: 4,
             default_target_format: MediaFormat::Flac,
+            ui_scale: Some(1.25),
         };
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: AppConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(config, deserialized);
+    }
+
+    #[test]
+    fn test_config_serde_backward_compat() {
+        let json = r#"{"language":"English","output_directory":null,"max_concurrent_jobs":2,"default_target_format":"Mp4"}"#;
+        let config: AppConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.ui_scale, None);
     }
 }

@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use directories::UserDirs;
 use iced::widget::{
-    button, column, container, pick_list, progress_bar, row, rule, scrollable, text,
+    button, column, container, pick_list, progress_bar, row, rule, scrollable, slider, text,
     Space,
 };
 use iced::{
@@ -35,6 +35,7 @@ fn main() -> iced::Result {
         .title("File converter")
         .subscription(App::subscription)
         .theme(App::theme)
+        .scale_factor(|state: &App| state.ui_scale as f32)
         .run()
 }
 
@@ -101,6 +102,14 @@ pub struct App {
     output_directory: PathBuf,
     view_mode: ViewMode,
     config: AppConfig,
+    /// UI scale factor applied globally via iced's scale_factor.
+    /// Defaults to 1.0 on standard DPI; automatically adjusted
+    /// so the interface is comfortably sized on any monitor.
+    ui_scale: f64,
+    /// The OS / monitor DPI scale factor reported by the window system
+    /// (e.g. 1.0 at 100%, 1.5 at 150%, 2.0 at 200%). Used only when the
+    /// user has not manually set `ui_scale` in their config.
+    monitor_scale: Option<f64>,
 }
 
 #[derive(Debug, Clone)]
@@ -119,13 +128,40 @@ pub enum Message {
     ToggleSettings,
     LanguageSelected(Language),
     ConcurrencyChanged(usize),
+    UiScaleChanged(f64),
+    UiScaleReset,
+    WindowEvent(iced::window::Event),
 }
 
 const CONCURRENCY_OPTIONS: [usize; 6] = [1, 2, 3, 4, 6, 8];
 
+const UI_SCALE_MIN: f64 = 0.75;
+const UI_SCALE_MAX: f64 = 1.75;
+const UI_SCALE_STEP: f64 = 0.05;
+
+/// Compute a reasonable UI scale factor.
+///
+/// Iced already handles HiDPI (e.g. 200% Windows scaling) via winit internally,
+/// so `scale_factor` here is an *additional* multiplier on top of the OS DPI.
+///
+/// We target a comfortable base size; on a monitor running at 100% OS scaling
+/// this is ~1.15. When the window system reports a larger native DPI scale
+/// (150%, 200%, ...), we compensate so the *total* effective size stays at the
+/// comfortable target, clamped to sane bounds.
+fn compute_ui_scale(monitor_scale: Option<f64>) -> f64 {
+    match monitor_scale {
+        Some(os_scale) if os_scale > 0.0 => (1.15 / os_scale).clamp(0.85, 1.5),
+        _ => 1.15,
+    }
+}
+
 impl App {
     pub fn new() -> (Self, Task<Message>) {
         let loaded_config = load_config();
+
+        let ui_scale = loaded_config
+            .ui_scale
+            .unwrap_or_else(|| compute_ui_scale(None));
 
         let default_dir = loaded_config.output_directory.clone().unwrap_or_else(|| {
             UserDirs::new()
@@ -150,6 +186,8 @@ impl App {
                 output_directory: default_dir,
                 view_mode: ViewMode::Queue,
                 config: loaded_config,
+                ui_scale,
+                monitor_scale: None,
             },
             Task::none(),
         )
@@ -160,7 +198,7 @@ impl App {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        Subscription::run_with(
+        let engine_sub = Subscription::run_with(
             EngineHandle(Arc::clone(&self.engine)),
             |handle: &EngineHandle| {
                 let engine = Arc::clone(&handle.0);
@@ -172,7 +210,11 @@ impl App {
                     }
                 })
             },
-        )
+        );
+
+        let window_sub = iced::window::events().map(|(_id, event)| Message::WindowEvent(event));
+
+        Subscription::batch([engine_sub, window_sub])
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -194,6 +236,28 @@ impl App {
                 let _ = save_config(&self.config);
                 Task::none()
             }
+            Message::UiScaleChanged(scale) => {
+                let scale = scale.clamp(UI_SCALE_MIN, UI_SCALE_MAX);
+                self.ui_scale = scale;
+                self.config.ui_scale = Some(scale);
+                let _ = save_config(&self.config);
+                Task::none()
+            }
+            Message::UiScaleReset => {
+                self.config.ui_scale = None;
+                self.ui_scale = compute_ui_scale(self.monitor_scale);
+                let _ = save_config(&self.config);
+                Task::none()
+            }
+            Message::WindowEvent(iced::window::Event::Rescaled(scale)) => {
+                let os_scale = scale as f64;
+                self.monitor_scale = Some(os_scale);
+                if self.config.ui_scale.is_none() {
+                    self.ui_scale = compute_ui_scale(Some(os_scale));
+                }
+                Task::none()
+            }
+            Message::WindowEvent(_) => Task::none(),
             Message::AddFilesClicked => {
                 Task::perform(
                     async {
@@ -585,6 +649,34 @@ impl App {
         .spacing(10)
         .align_y(Alignment::Center);
 
+        let is_manual_scale = self.config.ui_scale.is_some();
+
+        let auto_scale_btn = if is_manual_scale {
+            button(text(lang.ui_scale_auto_btn()).size(11))
+                .on_press(Message::UiScaleReset)
+                .padding([3, 8])
+        } else {
+            button(
+                text(lang.ui_scale_auto_btn())
+                    .size(11)
+                    .color(Color::from_rgb(0.4, 0.8, 1.0)),
+            )
+            .padding([3, 8])
+        };
+
+        let scale_slider = row![
+            text(lang.ui_scale_label()).size(13).width(Length::Fixed(180.0)),
+            slider(UI_SCALE_MIN..=UI_SCALE_MAX, self.ui_scale, Message::UiScaleChanged)
+                .step(UI_SCALE_STEP)
+                .width(Length::Fixed(220.0)),
+            text(format!("{:.0}%", self.ui_scale * 100.0))
+                .size(13)
+                .width(Length::Fixed(40.0)),
+            auto_scale_btn,
+        ]
+        .spacing(10)
+        .align_y(Alignment::Center);
+
         let back_btn = button(text(lang.close_btn()).size(13))
             .on_press(Message::ToggleSettings)
             .padding([6, 16]);
@@ -595,6 +687,7 @@ impl App {
             lang_picker,
             concurrency_picker,
             format_picker,
+            scale_slider,
             Space::new().height(Length::Fixed(12.0)),
             back_btn,
         ]
