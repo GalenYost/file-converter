@@ -8,5 +8,7 @@ converter-core = { version = "0.1.0", path = "../converter-core" }
 directories = "6.0.0"
 iced = { version = "0.14.0", features = ["wgpu", "tokio"] }
 rfd = "0.17.2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros"] }
 tracing-subscriber = "0.3.23"

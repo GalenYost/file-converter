@@ -498,6 +498,8 @@ dependencies = [
  "directories",
  "iced",
  "rfd",
+ "serde",
+ "serde_json",
  "tokio",
  "tracing-subscriber",
 ]
