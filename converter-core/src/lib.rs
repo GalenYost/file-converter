@@ -1,14 +1,11 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+pub mod engine;
+pub mod format;
+pub mod job;
+pub mod probe;
+pub mod progress;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use engine::{ConversionEngine, EngineConfig};
+pub use format::{MediaCategory, MediaFormat};
+pub use job::{ConversionJob, JobEvent, JobId, JobOptions, JobStatus};
+pub use probe::{probe_file, MediaInfo};
+pub use progress::{ConversionProgress, FfmpegProgressParser};
