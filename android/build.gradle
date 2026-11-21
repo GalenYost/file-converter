@@ -10,8 +10,8 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         minSdk 26
         targetSdk 35
-        versionCode providers.gradleProperty('apkVersionCode').getOrElse('1').toInteger()
-        versionName providers.gradleProperty('apkVersionName').getOrElse('0.3.5')
+        versionCode providers.gradleProperty('apkVersionCode').getOrElse('2').toInteger()
+        versionName providers.gradleProperty('apkVersionName').getOrElse('0.3.6')
     }
     packaging {
         jniLibs { useLegacyPackaging = true }
