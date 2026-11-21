@@ -1,6 +1,15 @@
 # File Converter
 
-A fast, lightweight, cross-platform desktop media converter written in Rust using [Iced](https://github.com/iced-rs/iced) and [FFmpeg](https://ffmpeg.org/).
+File Converter converts video, audio, and images on **Windows, macOS, Linux, and Android**. Download the package for your device from [GitHub Releases](https://github.com/GalenYost/file-converter/releases).
+
+| Platform | Release download |
+| --- | --- |
+| Windows (x86_64) | `file-converter-windows-x86_64.zip` |
+| macOS (Apple silicon) | `file-converter-macos-arm64.tar.gz` |
+| Linux (x86_64) | `file-converter-linux-x86_64.tar.gz` |
+| Android 8.0 or newer | `file-converter-android.apk` |
+
+On desktop, extract the entire archive and launch `converter-app` (`converter-app.exe` on Windows). The archive includes `ffmpeg`, `ffprobe`, and `yt-dlp` alongside the app. On Android, install the APK, which also includes its media tools.
 
 ---
 
@@ -23,7 +32,7 @@ A fast, lightweight, cross-platform desktop media converter written in Rust usin
 
 ## Architecture & Codebase
 
-The project is organized as a Cargo workspace with separation between core logic and the graphical interface:
+The desktop app uses a Rust Cargo workspace. The native Android app is a separate Gradle project.
 
 ```text
 file-converter/
@@ -43,16 +52,17 @@ file-converter/
 │   │   ├── config.rs        # Persistent user settings in OS config directory
 │   │   └── main.rs          # Application state, event subscription, and views
 │
-└── .github/workflows/       # Multi-platform CI/CD release workflow
-    └── release.yml          # Windows (x86_64), macOS (ARM64), and Linux (x86_64) builds
+├── android/                 # Native Android app and APK build
+└── .github/workflows/
+    ├── android.yml          # Build and verify Android APKs
+    └── release.yml          # Package desktop binaries and publish releases with the Android APK
 ```
 
 ---
 
-## Prerequisites
+## Building the desktop app from source
 
-- **Rust**: Latest stable Rust toolchain (edition 2024 / 2021).
-- **FFmpeg**: `ffmpeg` and `ffprobe` binaries installed and available in your system `PATH`.
+Use the latest stable Rust toolchain. To run a local Cargo build, you can copy `ffmpeg` and `ffprobe` from the matching desktop release into the directory containing the compiled app, or use copies already on your `PATH`.
 
 ### Linux Build Dependencies
 On Ubuntu/Debian systems, install the standard graphics and sound development headers:
@@ -67,7 +77,7 @@ sudo apt-get update && sudo apt-get install -y \
 
 ---
 
-## Building and Running
+## Desktop build commands
 
 ### Run the Application
 ```bash
