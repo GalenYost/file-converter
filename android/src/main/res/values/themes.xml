@@ -1,0 +1,11 @@
+<resources>
+    <style name="ConverterTheme" parent="@android:style/Theme.Material">
+        <item name="android:colorPrimary">#202329</item>
+        <item name="android:colorPrimaryDark">#191B20</item>
+        <item name="android:windowBackground">#191B20</item>
+        <item name="android:statusBarColor">#191B20</item>
+        <item name="android:navigationBarColor">#191B20</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:colorAccent">#8CB9FF</item>
+    </style>
+</resources>

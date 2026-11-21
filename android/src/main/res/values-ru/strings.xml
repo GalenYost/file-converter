@@ -1,0 +1,33 @@
+<resources>
+  <string name="settings">Настройки</string>
+  <string name="choose">Выбрать медиафайл</string>
+  <string name="tiktok">Скачать из TikTok</string>
+  <string name="format">Выходной формат</string>
+  <string name="choose_hint">Выберите аудио, видео или изображение.</string>
+  <string name="save">Сохранить файл</string>
+  <string name="convert">Конвертировать</string>
+  <string name="url_hint">Вставьте ссылку на видео TikTok</string>
+  <string name="invalid_url">Введите HTTPS-ссылку на видео TikTok.</string>
+  <string name="download">Скачать</string>
+  <string name="downloading">Загрузка…</string>
+  <string name="complete">Файл готов к сохранению.</string>
+  <string name="failure">Не удалось выполнить операцию. %1$s</string>
+  <string name="saving">Сохранение…</string>
+  <string name="saved">Файл сохранён.</string>
+  <string name="converting">Конвертация…</string>
+  <string name="system_language">Язык системы</string>
+  <string name="language">Язык интерфейса</string>
+  <string name="language_choice">Язык интерфейса · %1$s</string>
+  <string name="check_updates">Проверить обновления</string>
+  <string name="installed_version">Установлена версия %1$s</string>
+  <string name="checking">Проверка обновлений…</string>
+  <string name="up_to_date">У вас последняя версия.</string>
+  <string name="no_apk">В этом выпуске нет APK для Android.</string>
+  <string name="available">Доступно обновление · %1$s</string>
+  <string name="debug_release">Это тестовая сборка. Открыть страницу выпуска для отдельной установки?</string>
+  <string name="install_prompt">Скачать обновление и открыть установщик Android?</string>
+  <string name="view_release">Открыть выпуск</string>
+  <string name="invalid_update">APK несовместим с установленной версией.</string>
+  <string name="installer">Завершите обновление в установщике Android.</string>
+  <string name="install_denied">Разрешение на установку не предоставлено.</string>
+</resources>

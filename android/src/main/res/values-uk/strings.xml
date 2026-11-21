@@ -1,0 +1,33 @@
+<resources>
+  <string name="settings">Налаштування</string>
+  <string name="choose">Вибрати медіафайл</string>
+  <string name="tiktok">Завантажити з TikTok</string>
+  <string name="format">Формат результату</string>
+  <string name="choose_hint">Виберіть аудіо, відео або зображення.</string>
+  <string name="save">Зберегти файл</string>
+  <string name="convert">Конвертувати</string>
+  <string name="url_hint">Вставте посилання на відео TikTok</string>
+  <string name="invalid_url">Введіть HTTPS-посилання на відео TikTok.</string>
+  <string name="download">Завантажити</string>
+  <string name="downloading">Завантаження…</string>
+  <string name="complete">Файл готовий до збереження.</string>
+  <string name="failure">Не вдалося виконати операцію. %1$s</string>
+  <string name="saving">Збереження…</string>
+  <string name="saved">Файл збережено.</string>
+  <string name="converting">Конвертування…</string>
+  <string name="system_language">Мова системи</string>
+  <string name="language">Мова інтерфейсу</string>
+  <string name="language_choice">Мова інтерфейсу · %1$s</string>
+  <string name="check_updates">Перевірити оновлення</string>
+  <string name="installed_version">Встановлена версія %1$s</string>
+  <string name="checking">Перевірка оновлень…</string>
+  <string name="up_to_date">У вас найновіша версія.</string>
+  <string name="no_apk">Цей випуск не містить APK для Android.</string>
+  <string name="available">Доступне оновлення · %1$s</string>
+  <string name="debug_release">Це тестова збірка. Відкрити сторінку випуску для окремого встановлення?</string>
+  <string name="install_prompt">Завантажити оновлення й відкрити інсталятор Android?</string>
+  <string name="view_release">Переглянути випуск</string>
+  <string name="invalid_update">APK несумісний зі встановленою версією.</string>
+  <string name="installer">Завершіть оновлення в інсталяторі Android.</string>
+  <string name="install_denied">Дозвіл на встановлення не надано.</string>
+</resources>
