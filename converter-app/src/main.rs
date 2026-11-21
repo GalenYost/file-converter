@@ -1,6 +1,7 @@
 #![windows_subsystem = "windows"]
 
 mod config;
+mod edit_menu;
 mod i18n;
 mod updates;
 
@@ -11,7 +12,7 @@ use std::sync::Arc;
 use directories::UserDirs;
 use iced::widget::{
     button, column, container, pick_list, progress_bar, radio, row, rule, scrollable, slider,
-    text, text_input, Space,
+    text, Space,
 };
 use iced::{
     Alignment, Color, Element, Length, Subscription, Task, Theme,
@@ -215,7 +216,7 @@ pub enum Message {
     PerformUpdate,
     UpdateResult(Result<(), String>),
     WindowEvent(iced::window::Id, iced::window::Event),
-    DownloadUrlChanged(String),
+    DownloadUrlEdited(edit_menu::Edit),
     DownloadFormatChanged(DownloadFormat),
     StartDownload,
     CancelDownload(DownloadId),
@@ -504,9 +505,11 @@ impl App {
 
                 task
             }
-            Message::DownloadUrlChanged(url) => {
-                self.download_url = url;
-                Task::none()
+            Message::DownloadUrlEdited(edit) => {
+                if let Some(value) = edit.value {
+                    self.download_url = value;
+                }
+                edit.copy.map_or_else(Task::none, iced::clipboard::write)
             }
             Message::DownloadFormatChanged(format) => {
                 self.download_format = format;
@@ -993,10 +996,8 @@ impl App {
     fn view_downloader(&self) -> Element<'_, Message> {
         let lang = self.config.language;
 
-        let url_input = text_input(lang.dl_url_placeholder(), &self.download_url)
-            .on_input(Message::DownloadUrlChanged)
-            .padding([6, 10])
-            .width(Length::Fill);
+        let url_input = edit_menu::input(lang.dl_url_placeholder(), &self.download_url, lang)
+            .map(Message::DownloadUrlEdited);
 
         let format_row = row![
             text(lang.dl_format_label()).size(12),
