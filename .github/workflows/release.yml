@@ -29,7 +29,7 @@ jobs:
             binary_name: converter-app
             archive_name: file-converter-macos-arm64.tar.gz
 
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             binary_name: converter-app
             archive_name: file-converter-linux-x86_64.tar.gz
@@ -56,6 +56,19 @@ jobs:
 
       - name: Build Release Binary
         run: cargo build --release --bin converter-app --target ${{ matrix.target }}
+
+      - name: Verify Linux executable compatibility
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          app="target/${{ matrix.target }}/release/converter-app"
+          versions=$(readelf -W --version-info "$app" | grep -oE 'GLIBC_[0-9]+(\.[0-9]+)+' | sort -Vu)
+          required=${versions##*$'\n'}
+          if [[ $(printf '%s\n' "$required" GLIBC_2.39 | sort -V | tail -1) != GLIBC_2.39 ]]; then
+            echo "::error::Linux binary requires $required; maximum supported requirement is GLIBC_2.39"
+            exit 1
+          fi
+          /lib64/ld-linux-x86-64.so.2 --list "$app"
 
       - name: Bundle FFmpeg (Windows)
         if: runner.os == 'Windows'

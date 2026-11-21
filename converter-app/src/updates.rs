@@ -199,6 +199,9 @@ fn replace_files(extracted_dir: &Path, install_dir: &Path, exe: &Path) -> Result
         return Err(format!("Archive does not contain {}", exe_name));
     }
 
+    #[cfg(all(target_os = "linux", target_arch = "x86_64", target_env = "gnu"))]
+    check_linux_compatibility(&bin_file)?;
+
     for tool in ["ffmpeg", "ffprobe", "yt-dlp"] {
         let name = format!("{}{}", tool, exe_suffix());
         let src = extracted_dir.join(&name);
@@ -220,6 +223,30 @@ fn replace_files(extracted_dir: &Path, install_dir: &Path, exe: &Path) -> Result
             info!("Update applied; the running process should now exit");
         }
     })
+}
+
+// Ask the same ELF loader used by the Linux release to resolve its libraries
+// without starting the GUI. A missing symbol version can be reported with exit 0.
+#[cfg(all(target_os = "linux", target_arch = "x86_64", target_env = "gnu"))]
+fn check_linux_compatibility(exe: &Path) -> Result<(), String> {
+    let result = std::process::Command::new("/lib64/ld-linux-x86-64.so.2")
+        .arg("--list")
+        .arg(exe)
+        .env("LC_ALL", "C")
+        .output()
+        .map_err(|e| format!("Could not check Linux update compatibility: {e}"))?;
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    let stdout = String::from_utf8_lossy(&result.stdout);
+    let missing = stderr.lines().chain(stdout.lines()).find(|line| {
+        line.contains("not found (required by") || line.trim_end().ends_with("=> not found")
+    });
+    if let Some(detail) = missing {
+        return Err(format!("Cannot run this update on this system: {detail}"));
+    }
+    if !result.status.success() {
+        return Err(format!("Linux loader check failed ({}): {}", result.status, stderr.trim()));
+    }
+    Ok(())
 }
 
 /// Replaces the running executable and hands off to the new version. Returns
@@ -328,6 +355,23 @@ pub fn cleanup_stale_update_files() {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
+
+    #[cfg(all(target_os = "linux", target_arch = "x86_64", target_env = "gnu"))]
+    #[test]
+    fn incompatible_update_preserves_installed_files() {
+        let install = tempfile::tempdir().unwrap();
+        let stage = update_workspace(install.path()).unwrap();
+        let exe = install.path().join("converter-app");
+        let tool = install.path().join("ffmpeg");
+        std::fs::write(&exe, b"existing executable").unwrap();
+        std::fs::write(&tool, b"existing tool").unwrap();
+        std::fs::write(stage.path().join("converter-app"), b"invalid ELF").unwrap();
+        std::fs::write(stage.path().join("ffmpeg"), b"replacement tool").unwrap();
+
+        assert!(replace_files(stage.path(), install.path(), &exe).is_err());
+        assert_eq!(std::fs::read(exe).unwrap(), b"existing executable");
+        assert_eq!(std::fs::read(tool).unwrap(), b"existing tool");
+    }
 
     #[test]
     fn stages_and_replaces_an_existing_installation_in_place() {

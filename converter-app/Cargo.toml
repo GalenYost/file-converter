@@ -1,10 +1,10 @@
 [package]
 name = "converter-app"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 
 [dependencies]
-converter-core = { version = "0.4.0", path = "../converter-core" }
+converter-core = { version = "0.4.1", path = "../converter-core" }
 directories = "6.0.0"
 flate2 = "1.1.10"
 iced = { version = "0.14.0", features = ["advanced", "wgpu", "tokio"] }
