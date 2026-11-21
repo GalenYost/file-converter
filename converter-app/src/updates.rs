@@ -38,13 +38,6 @@ fn exe_suffix() -> &'static str {
     }
 }
 
-fn bundled_file_names() -> &'static [&'static str] {
-    &[
-        "ffmpeg",
-        "ffprobe",
-    ]
-}
-
 /// Queries the GitHub Releases API for the latest tagged release and compares
 /// it against the current build version. Returns `Some` only when a newer
 /// version is available.
@@ -139,17 +132,18 @@ pub fn apply_update(info: &UpdateInfo) -> Result<(), String> {
         .ok_or_else(|| "Could not determine install directory".to_string())?
         .to_path_buf();
 
-    let work_dir = std::env::temp_dir().join(format!("file-converter-update-{}", std::process::id()));
-    std::fs::create_dir_all(&work_dir).map_err(|e| format!("Could not create temp dir: {}", e))?;
+    let work_dir = update_workspace(&install_dir)?;
+    let archive_path = download_archive(info, work_dir.path())?;
+    let extracted_dir = extract_archive(&archive_path, work_dir.path())?;
+    replace_files(&extracted_dir, &install_dir, &exe)
+}
 
-    let result = (|| {
-        let archive_path = download_archive(info, &work_dir)?;
-        let extracted_dir = extract_archive(&archive_path, &work_dir)?;
-        replace_files(&extracted_dir, &install_dir, &exe)
-    })();
-
-    let _ = std::fs::remove_dir_all(&work_dir);
-    result
+fn update_workspace(install_dir: &Path) -> Result<tempfile::TempDir, String> {
+    // rename(2) needs the staged file and its destination on the same filesystem.
+    tempfile::Builder::new()
+        .prefix(".file-converter-update-")
+        .tempdir_in(install_dir)
+        .map_err(|e| format!("Could not stage update in {}: {}", install_dir.display(), e))
 }
 
 fn download_archive(info: &UpdateInfo, work_dir: &Path) -> Result<PathBuf, String> {
@@ -205,33 +199,23 @@ fn replace_files(extracted_dir: &Path, install_dir: &Path, exe: &Path) -> Result
         return Err(format!("Archive does not contain {}", exe_name));
     }
 
-    for tool in bundled_file_names() {
+    for tool in ["ffmpeg", "ffprobe", "yt-dlp"] {
         let name = format!("{}{}", tool, exe_suffix());
         let src = extracted_dir.join(&name);
         if src.exists() {
             let dst = install_dir.join(&name);
+            #[cfg(unix)]
+            install_unix_binary(&src, &dst)?;
+            #[cfg(not(unix))]
             std::fs::copy(&src, &dst)
                 .map_err(|e| format!("Could not replace {}: {}", name, e))?;
-            #[cfg(unix)]
-            make_executable(&dst)?;
             info!("Replaced bundled {}", name);
         } else {
             info!("Archive has no bundled {}, skipping", name);
         }
     }
 
-    let ytdlp_name = format!("yt-dlp{}", exe_suffix());
-    let src_ytdlp = extracted_dir.join(&ytdlp_name);
-    if src_ytdlp.exists() {
-        let dst = install_dir.join(&ytdlp_name);
-        std::fs::copy(&src_ytdlp, &dst)
-            .map_err(|e| format!("Could not replace {}: {}", ytdlp_name, e))?;
-        #[cfg(unix)]
-        make_executable(&dst)?;
-    }
-
-    let new_exe = extracted_dir.join(&exe_name);
-    relocate_executable(&new_exe, exe, install_dir).map(|relaunched| {
+    relocate_executable(&bin_file, exe, install_dir).map(|relaunched| {
         if relaunched {
             info!("Update applied; the running process should now exit");
         }
@@ -294,13 +278,10 @@ fn relocate_executable(
         Ok(true)
     }
 
-    #[cfg(not(windows))]
+    #[cfg(unix)]
     {
         let _ = install_dir;
-        std::fs::rename(new_exe, current_exe)
-            .map_err(|e| format!("Could not replace current executable: {}", e))?;
-        #[cfg(unix)]
-        make_executable(current_exe)?;
+        install_unix_binary(new_exe, current_exe)?;
 
         let spawned = std::process::Command::new(current_exe)
             .spawn()
@@ -311,14 +292,16 @@ fn relocate_executable(
 }
 
 #[cfg(unix)]
-fn make_executable(path: &Path) -> Result<(), String> {
+fn install_unix_binary(path: &Path, destination: &Path) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
     let mut perms = std::fs::metadata(path)
         .map_err(|e| format!("Could not read permissions of {}: {}", path.display(), e))?
         .permissions();
     perms.set_mode(0o755);
     std::fs::set_permissions(path, perms)
-        .map_err(|e| format!("Could not set permissions of {}: {}", path.display(), e))
+        .map_err(|e| format!("Could not set permissions of {}: {}", path.display(), e))?;
+    std::fs::rename(path, destination)
+        .map_err(|e| format!("Could not replace {}: {}", destination.display(), e))
 }
 
 /// Cleans up stale files from a previous in-place update (Windows only). Safe to
@@ -339,5 +322,37 @@ pub fn cleanup_stale_update_files() {
         if bat.exists() {
             let _ = std::fs::remove_file(&bat);
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stages_and_replaces_an_existing_installation_in_place() {
+        let install = tempfile::tempdir().unwrap();
+        let workspace = update_workspace(install.path()).unwrap();
+        let staged = workspace.path().to_owned();
+        assert_eq!(staged.parent(), Some(install.path()));
+
+        use std::io::Read;
+        use std::os::unix::fs::PermissionsExt;
+
+        let exe = install.path().join("converter-app");
+        let new_exe = staged.join("converter-app");
+        std::fs::write(&exe, b"old executable").unwrap();
+        let mut running = std::fs::File::open(&exe).unwrap();
+        std::fs::write(&new_exe, b"new executable").unwrap();
+
+        install_unix_binary(&new_exe, &exe).unwrap();
+        assert_eq!(std::fs::read(&exe).unwrap(), b"new executable");
+        assert_eq!(std::fs::metadata(exe).unwrap().permissions().mode() & 0o777, 0o755);
+        let mut old = String::new();
+        running.read_to_string(&mut old).unwrap();
+        assert_eq!(old, "old executable");
+
+        drop(workspace);
+        assert!(!staged.exists());
     }
 }
